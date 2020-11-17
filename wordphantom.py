@@ -9,7 +9,7 @@ import tensorflow as tf
 from transformers import pipeline
 import docx
 
-def googleSearch(query):
+def get_links(query):
     g_clean = [ ] #this is the list we store the search results
     url = 'https://www.google.com/search?client=ubuntu&channel=fs&q={}&ie=utf-8&oe=utf-8'.format(query)    
     try:
@@ -41,7 +41,7 @@ def get_soup(url):
     return soup
 
 def get_text(query):
-    urls = googleSearch(query)
+    urls = get_links(query)
     d = {}
     for url in urls[:5]:
         if url[-3:] == 'pdf':
@@ -54,35 +54,46 @@ def get_text(query):
     return d
 
 def write_docx(filepath, text, link, query):
+    doc.add_paragraph(text)
+    doc.add_paragraph(link)
+    doc.save(filepath)
+
+def create_text_section(filepath, query, summarizer):
+    # read or create word document and make query the heading
     try:
         doc = docx.Document(filepath)
     except:
         doc = docx.Document()
     doc.add_heading(query, 1)
-    doc.add_paragraph(text)
-    doc.add_paragraph(link)
-    doc.save(filepath)
 
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Scrape the googs!")
-    parser.add_argument('query', type=str, help="Your google query")
-    parser.add_argument('filepath', type=str, help="Word Document full filepath")
-    args = parser.parse_args()
-    summarize = pipeline("summarization")
-    text = get_text(args.query)
+    # scrape text
+    text = get_text(query)
     print(text, type(text))
     for url, t in text.items():
         
         try:
             remove_short = " ".join(line for line in t.split('\n') if len(line) > 20 or " [ " in line)
             print(f"Summarizing {url} ...")
-            summary = summarize(remove_short, min_length=110, max_length=200)
-            write_docx(args.filepath, summary[0]['summary_text'], url, args.query)
+            summary = summarizer(remove_short, min_length=110, max_length=200)
+            doc.add_paragraph(summary[0]['summary_text'])
+            doc.add_paragraph(url)
+            doc.save(filepath)
+
         except Exception as e:
 
             print(f"boo {url} ...")
             print(e)
     
             continue
+    
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Scrape the googs!")
+    parser.add_argument('filepath', type=str, help="Word Document full filepath")
+    
+    parser.add_argument('queries', type=str, nargs='*', help="Your google queries")
+    args = parser.parse_args()
+    summarizer = pipeline("summarization")
+    for query in args.queries:
+        create_text_section(args.filepath, query, summarizer)
     
