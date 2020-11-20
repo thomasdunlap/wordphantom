@@ -8,6 +8,7 @@ import asyncio
 import tensorflow as tf
 from transformers import pipeline
 import docx
+import math
 
 def get_links(query):
     g_clean = [ ] #this is the list we store the search results
@@ -53,11 +54,6 @@ def get_text(query):
 
     return d
 
-def write_docx(filepath, text, link, query):
-    doc.add_paragraph(text)
-    doc.add_paragraph(link)
-    doc.save(filepath)
-
 def create_text_section(filepath, query, summarizer):
     # read or create word document and make query the heading
     try:
@@ -74,8 +70,8 @@ def create_text_section(filepath, query, summarizer):
         try:
             remove_short = " ".join(line for line in t.split('\n') if len(line) > 20 or " [ " in line)
             print(f"Summarizing {url} ...")
-            summary = summarizer(remove_short, min_length=110, max_length=200)
-            doc.add_paragraph(summary[0]['summary_text'])
+            summary = get_summaries(remove_short, summarizer)
+            doc.add_paragraph(summary)
             doc.add_paragraph(url)
             doc.save(filepath)
 
@@ -86,6 +82,30 @@ def create_text_section(filepath, query, summarizer):
     
             continue
     
+def get_summaries(full_text, summarizer):
+    N = len(full_text)
+
+    if N < 18000:
+        # maker sure n_batches is always at least 1
+        n_batches = math.ceil((N + 1) / 6000)
+        batch = N // n_batches
+    else:
+        batch = N // 3
+
+    summaries = []
+    for i in range(0, N, batch):
+        print(i, batch+i)
+        section = full_text[i:(i+batch)]
+        try:
+            summary = summarizer(section, min_length=90, max_length=200)
+            #pprint(named_entity(section))
+            summaries.append(summary[0]['summary_text'])
+            print(summary)
+        except Exception as e:
+            print(f"\nFAILURE: {e}")
+            continue
+    cleaned_summaries = ". ".join(sentence[0].upper() + sentence[1:] for sentence in "\n".join(summaries).split(" . "))
+    return cleaned_summaries
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Scrape the googs!")
