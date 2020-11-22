@@ -13,9 +13,18 @@ Current state usage:
 * `cd wordphantom`
 * Set up a clean Python3 virtual environment (conda, virtualenv, etc.)
 * `pip install -r requirements.txt`
-* `python wordphantom.py "your google search" "/path/to/WordDoc.docx"` 
+* `python wordphantom.py "./docs/<your MS Word doc>.docx" "<your google search 1>" "<your google search 2>" ... "<your google search n>"`  
 
 Stay tuned! :D
+
+Currently implementing:
+* Scraping relevant images to insert into blog post
+* Scraping pdfs with text in a two-column structure (so I can scrape ML publication pdfs as well as websites)
+
+Future ideas:
+* Adding citations
+* Improved useful text preprocessing and identification
+* Meme generator based on content (Medium-style articles seem to enjoy memes and gifs)
 
 
 
