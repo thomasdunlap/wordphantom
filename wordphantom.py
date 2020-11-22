@@ -9,6 +9,7 @@ import tensorflow as tf
 from transformers import pipeline
 import docx
 import math
+from imagephantom import scrape_images
 
 def get_links(query):
     g_clean = [ ] #this is the list we store the search results
@@ -66,6 +67,15 @@ def create_text_section(filepath, query, summarizer):
     text = get_text(query)
     print(text, type(text))
     for url, t in text.items():
+        
+        for img in scrape_images(url):
+            print(f"Attempting to add img from {url}")
+            try:
+                doc.add_picture(img)
+            except:
+                print("Nope")
+                continue
+
         
         try:
             remove_short = " ".join(line for line in t.split('\n') if len(line) > 20 or " [ " in line)

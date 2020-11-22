@@ -3,6 +3,8 @@ env/
 venv/
 *.pyc
 *.h5
-images/
-docs/
 .~lock*
+*.pdf
+*.docx
+*.jpg
+*.png

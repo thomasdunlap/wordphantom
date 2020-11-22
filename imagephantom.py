@@ -5,11 +5,7 @@ import re
 import requests
 from PIL import Image
 
-folder = '/home/thomas/projects/bert-blog/google-search-text/bert_blog'
-
-
-if __name__ == '__main__':
-    url = "http://jalammar.github.io/illustrated-bert/"
+def scrape_images(url):
     html = requests.get(url)
     soup = BeautifulSoup(html.text, 'lxml')
     print(soup.find_all('img'))
@@ -29,4 +25,9 @@ if __name__ == '__main__':
             print(f"\nIMAGE ERROR for {url}: {e}\n")
             continue
         img.save("./images/" + image_url[-10:])
+        
+        yield img
 
+if __name__ == '__main__':
+    scrape_images("https://www.yahoo.com")
+    
