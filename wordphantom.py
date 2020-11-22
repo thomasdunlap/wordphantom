@@ -45,7 +45,7 @@ def get_soup(url):
 def get_text(query):
     urls = get_links(query)
     d = {}
-    for url in urls[:5]:
+    for url in urls[:9]:
         if url[-3:] == 'pdf':
             print(f"Gross. {url} is a pdf file.")
             continue
@@ -68,12 +68,13 @@ def create_text_section(filepath, query, summarizer):
     print(text, type(text))
     for url, t in text.items():
         
-        for img in scrape_images(url):
+        for img_path, img in scrape_images(url):
             print(f"Attempting to add img from {url}")
+
             try:
-                doc.add_picture(img)
-            except:
-                print("Nope")
+                doc.add_picture(img_path)
+            except Exception as e:
+                print(f"Nope: {e}")
                 continue
 
         
