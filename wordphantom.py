@@ -8,6 +8,8 @@ import asyncio
 import tensorflow as tf
 from transformers import pipeline
 import docx
+import math
+from imagephantom import scrape_images
 
 def get_links(query):
     g_clean = [ ] #this is the list we store the search results
@@ -43,7 +45,7 @@ def get_soup(url):
 def get_text(query):
     urls = get_links(query)
     d = {}
-    for url in urls[:5]:
+    for url in urls[:9]:
         if url[-3:] == 'pdf':
             print(f"Gross. {url} is a pdf file.")
             continue
@@ -52,11 +54,6 @@ def get_text(query):
             d[url] = soup.get_text()
 
     return d
-
-def write_docx(filepath, text, link, query):
-    doc.add_paragraph(text)
-    doc.add_paragraph(link)
-    doc.save(filepath)
 
 def create_text_section(filepath, query, summarizer):
     # read or create word document and make query the heading
@@ -71,11 +68,21 @@ def create_text_section(filepath, query, summarizer):
     print(text, type(text))
     for url, t in text.items():
         
+        for img_path, img in scrape_images(url):
+            print(f"Attempting to add img from {url}")
+
+            try:
+                doc.add_picture(img_path)
+            except Exception as e:
+                print(f"Nope: {e}")
+                continue
+
+        
         try:
             remove_short = " ".join(line for line in t.split('\n') if len(line) > 20 or " [ " in line)
             print(f"Summarizing {url} ...")
-            summary = summarizer(remove_short, min_length=110, max_length=200)
-            doc.add_paragraph(summary[0]['summary_text'])
+            summary = get_summaries(remove_short, summarizer)
+            doc.add_paragraph(summary)
             doc.add_paragraph(url)
             doc.save(filepath)
 
@@ -86,6 +93,30 @@ def create_text_section(filepath, query, summarizer):
     
             continue
     
+def get_summaries(full_text, summarizer):
+    N = len(full_text)
+
+    if N < 18000:
+        # maker sure n_batches is always at least 1
+        n_batches = math.ceil((N + 1) / 6000)
+        batch = N // n_batches
+    else:
+        batch = N // 3
+
+    summaries = []
+    for i in range(0, N, batch):
+        print(i, batch+i)
+        section = full_text[i:(i+batch)]
+        try:
+            summary = summarizer(section, min_length=90, max_length=200)
+            #pprint(named_entity(section))
+            summaries.append(summary[0]['summary_text'])
+            print(summary)
+        except Exception as e:
+            print(f"\nFAILURE: {e}")
+            continue
+    cleaned_summaries = ". ".join(sentence[0].upper() + sentence[1:] for sentence in "\n".join(summaries).split(" . "))
+    return cleaned_summaries
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Scrape the googs!")
