@@ -16,7 +16,7 @@ def get_links(query):
     url = 'https://www.google.com/search?client=ubuntu&channel=fs&q={}&ie=utf-8&oe=utf-8'.format(query)    
     try:
         html = requests.get(url)
-        if html.status_code==200:
+        if html.status_code == 200:
             soup = BeautifulSoup(html.text, 'lxml')
             a = soup.find_all('a') 
             for i in a:
