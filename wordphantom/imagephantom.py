@@ -6,12 +6,12 @@ import requests
 from PIL import Image
 import os
 
-def scrape_images(url):
+def scrape_images(url, n=1):
     html = requests.get(url)
     soup = BeautifulSoup(html.text, 'lxml')
     print(soup.find_all('img'))
     images = soup.find_all('img', {'src':re.compile('.jpg|.png')})
-    for image in images[:5]: 
+    for image in images[:n]: 
         print(image['src']+'\n')
     
         image_url = image['src']
