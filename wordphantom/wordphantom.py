@@ -74,7 +74,7 @@ def get_text(query, n=9):
     return d
 
 def zip_concat_text(text_list):
-    return '\n'.join(' '.join(tup) for tup in zip_longest(*text_list, fillvalue=' '))
+    return '\n'.join(' '.join(tup) for tup in zip_longest(*(text[0].split(". ") for text in text_list), fillvalue=' '))
 
 
 def create_text_section(filepath, query, summarizer):
@@ -121,9 +121,9 @@ def create_text_section(filepath, query, summarizer):
             print(f"\n\nEXCEPTION: {e}\n\n")
     
             continue
-
+    print(text_exp[:3])
     all_text = zip_concat_text(text_exp)
-    all_summed = get_summaries(all_text, summarizer, batch_size=3000)
+    all_summed = get_summaries(all_text, summarizer, batch_size=4500)
     final_text = clean_summaries(all_summed)
     print(f"All Summaries: {all_text}")
     doc.add_paragraph(final_text)
