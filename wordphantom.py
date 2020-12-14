@@ -11,16 +11,17 @@ import tensorflow as tf
 from transformers import pipeline
 import docx
 import math
-from imagephantom import scrape_images
+from wordphantom.imagephantom import scrape_images
+
 
 def get_links(query):
     g_clean = [ ] #this is the list we store the search results
-    url = 'https://www.google.com/search?client=ubuntu&channel=fs&q={}&ie=utf-8&oe=utf-8'.format(query)    
+    url = 'https://www.google.com/search?client=ubuntu&channel=fs&q={}&ie=utf-8&oe=utf-8'.format(query)
     try:
         html = requests.get(url)
         if html.status_code == 200:
             soup = BeautifulSoup(html.text, 'lxml')
-            a = soup.find_all('a') 
+            a = soup.find_all('a')
             for i in a:
                 k = i.get('href')
                 try:
@@ -52,7 +53,7 @@ def get_text(query, n=9):
         url = url.split("%")[0]
         article = url.split('/')[-1]
         print(f"\n\n{url}, {d.keys()}\n{url}\n\n")
-        
+
         if url[-3:] == 'pdf':
             print(f"Gross. {url} is a pdf file.")
             continue
@@ -62,10 +63,10 @@ def get_text(query, n=9):
         elif len({s for s in d.keys() if article != '' \
                 and article in s.split('/')[:-1] \
                 and len(s.split('/')[:-1]) - len(article) < 6}):
-            
+
             print(f"{url} similar to other in {d.keys()}")
             continue
-        
+
         else:
             print(f"Getting soup for {url}")
             soup = get_soup(url)
@@ -91,7 +92,7 @@ def create_text_section(filepath, query, summarizer):
     text = get_text(query)
     print(text, type(text))
     for url, t in text.items():
-        
+
         for img_path, img in scrape_images(url):
             print(f"Attempting to add img from {url}")
 
@@ -101,10 +102,10 @@ def create_text_section(filepath, query, summarizer):
                 print(f"Nope: {e}")
                 continue
 
-        
+
         try:
             remove_short = " ".join(line for line in t.split('\n') if len(line) > 20 or " [ " in line)
-            remove_short = remove_short.split('\n') 
+            remove_short = remove_short.split('\n')
             text_exp.append(remove_short)
             #print(f"Summarizing {url} ...")
             #summaries = get_summaries(remove_short, summarizer)
@@ -119,7 +120,7 @@ def create_text_section(filepath, query, summarizer):
 
             print(f"boo {url} ...")
             print(f"\n\nEXCEPTION: {e}\n\n")
-    
+
             continue
 
     all_text = zip_concat_text(text_exp)
@@ -132,7 +133,7 @@ def create_text_section(filepath, query, summarizer):
 def get_summaries(full_text, summarizer, batch_size=3000):
     N = len(full_text)
 
-    
+
     # maker sure n_batches is always at least 1
     n_batches = math.ceil((N+1) / batch_size)
     batch = N // n_batches
@@ -152,7 +153,7 @@ def get_summaries(full_text, summarizer, batch_size=3000):
         except Exception as e:
             print(f"\nFAILURE: {e}")
             continue
-    
+
     return summaries
 
 def clean_summaries(summaries):
@@ -163,10 +164,9 @@ def clean_summaries(summaries):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Scrape the googs!")
     parser.add_argument('filepath', type=str, help="Word Document full filepath")
-    
+
     parser.add_argument('queries', type=str, nargs='*', help="Your google queries")
     args = parser.parse_args()
     summarizer = pipeline("summarization")
     for query in args.queries:
         create_text_section(args.filepath, query, summarizer)
-    
