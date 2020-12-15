@@ -1,164 +1,166 @@
 import os
 import requests
-from itertools import zip_longest
-from bs4 import BeautifulSoup
-import re
-import urllib.parse
-from urllib.parse import urlparse
 import argparse
-import asyncio
-import tensorflow as tf
-from transformers import pipeline
+import re
 import docx
 import math
+import urllib.parse
+from docx.shared import Inches
+from itertools import zip_longest
+from bs4 import BeautifulSoup
+from urllib.parse import urlparse
+from transformers import pipeline
 from wordphantom.imagephantom import scrape_images
 
+class WordPhantom:
+    '''Creates summaries of scraped info from google queries'''
+    def __init__(self, docx_path, batch_size=3000, num_images=1):
+        self.filepath = docx_path
+        self.batch_size = batch_size
+        self.num_images = num_images
+        self.summarizer = pipeline('summarization')
+        self.links = []
+        self.text_exp = ''
+        self.summaries = []
 
-def get_links(query):
-    g_clean = [ ] #this is the list we store the search results
-    url = 'https://www.google.com/search?client=ubuntu&channel=fs&q={}&ie=utf-8&oe=utf-8'.format(query)
-    try:
-        html = requests.get(url)
-        if html.status_code == 200:
-            soup = BeautifulSoup(html.text, 'lxml')
-            a = soup.find_all('a')
-            for i in a:
-                k = i.get('href')
-                try:
-                    m = re.search("(?P<url>https?://[^\s]+)", k)
-                    n = m.group(0)
-                    rul = n.split('&')[0]
-                    domain = urlparse(rul)
-                    if(re.search('google.com', domain.netloc)):
+    def get_links(self, query):
+        '''Collects links from google'''
+        self.google_url = 'https://www.google.com/search?client=ubuntu&channel=fs&q={}&ie=utf-8&oe=utf-8'.format(query)
+        try:
+            html = requests.get(self.google_url)
+            if html.status_code == 200:
+                soup = BeautifulSoup(html.text, 'lxml')
+                a = soup.find_all('a')
+                for i in a:
+                    k = i.get('href')
+                    try:
+                        m = re.search("(?P<url>https?://[^\s]+)", k)
+                        n = m.group(0)
+                        rul = n.split('&')[0]
+                        domain = urlparse(rul)
+                        if(re.search('google.com', domain.netloc)):
+                            continue
+                        else:
+                            self.links.append(rul)
+                    except:
                         continue
-                    else:
-                        g_clean.append(rul)
-                except:
+        except Exception as ex:
+            print(str(ex))
+        return self.links
+
+    def get_soup(self, url):
+        '''Gets BeautifulSoup text object'''
+        html = requests.get(url)
+        soup = BeautifulSoup(html.text, 'lxml')
+        return soup
+
+    def get_text(self, n_links=9):
+        '''Scrapes text from links'''
+        BAD_URLS = {"youtube.com"}
+        d = {}
+        self.links = self.get_links(self.query)
+        for url in self.links[:n_links]:
+            url = url.split("%")[0]
+            article = url.split('/')[-1]
+            print(f"\n\n{url}, {d.keys()}\n{url}\n\n")
+
+            if url[-3:] == 'pdf':
+                print(f"Gross. {url} is a pdf file.")
+                continue
+            elif len({burl for burl in BAD_URLS if burl in url}):
+                print(f"{url} in set {BAD_URLS}")
+                continue
+            elif len({s for s in d.keys() if article != '' \
+                    and article in s.split('/')[:-1] \
+                    and len(s.split('/')[:-1]) - len(article) < 6}):
+
+                print(f"{url} similar to other in {d.keys()}")
+                continue
+
+            else:
+                print(f"Getting soup for {url}")
+                soup = self.get_soup(url)
+                d[url] = soup.get_text()
+
+        return d
+
+    def get_summaries(self):
+        '''Summarizes text scraped from links'''
+        N = len(self.text_exp)
+        print("\n\nInside get_summaries\n", N, self.text_exp)
+        # maker sure n_batches is always at least 1
+        n_batches = math.ceil((N+1) / self.batch_size)
+        batch = N // n_batches
+
+        for i in range(0, N, batch):
+            print(i, batch+i)
+            section = self.text_exp[i:(i+batch)]
+            try:
+                if len(section) < 50:
+                    print("section too short")
                     continue
-    except Exception as ex:
-        print(str(ex))
-    finally:
-        return g_clean
 
-def get_soup(url):
-    html = requests.get(url)
-    soup = BeautifulSoup(html.text, 'lxml')
-    return soup
+                summary = self.summarizer(section, min_length=90, max_length=200)
+                self.summaries.append(summary[0]['summary_text'])
+                print(summary)
+            except Exception as e:
+                print(f"\nFAILURE: {e}")
+                continue
+        return self.summaries
 
-def get_text(query, n=9):
-    BAD_URLS = {"youtube.com"}
-    urls = get_links(query)
-    d = {}
-    for url in urls[:n]:
-        url = url.split("%")[0]
-        article = url.split('/')[-1]
-        print(f"\n\n{url}, {d.keys()}\n{url}\n\n")
+    def clean_summaries(self):
+        '''Cleans summarized text'''
+        print("Inside clean_summaries")
+        self.final_text = ". ".join(sentence[0].upper() + sentence[1:] for sentence in "\n".join(self.summaries).split(" . "))
+        return self.final_text
 
-        if url[-3:] == 'pdf':
-            print(f"Gross. {url} is a pdf file.")
-            continue
-        elif len({burl for burl in BAD_URLS if burl in url}):
-            print(f"{url} in set {BAD_URLS}")
-            continue
-        elif len({s for s in d.keys() if article != '' \
-                and article in s.split('/')[:-1] \
-                and len(s.split('/')[:-1]) - len(article) < 6}):
+    def create_text_section(self, query):
+        '''Writes MS Word Document with summarized text, pictures, and links'''
+        # read or create word document and make query the heading
 
-            print(f"{url} similar to other in {d.keys()}")
-            continue
+        self.query = query
+        print("Creating document.")
+        try:
+            self.doc = docx.Document(self.filepath)
+        except:
+            self.doc = docx.Document()
+        self.doc.add_heading(query, 1)
+        all_summaries = []
 
-        else:
-            print(f"Getting soup for {url}")
-            soup = get_soup(url)
-            d[url] = soup.get_text()
+        # scrape text
+        text = self.get_text()
+        print(text, type(text))
+        for url, t in text.items():
 
-    return d
+            for img_path, img in scrape_images(url, n=self.num_images):
+                print(f"Attempting to add img from {url}")
 
-def zip_concat_text(text_list):
-    return '\n'.join(' '.join(tup) for tup in zip_longest(*text_list, fillvalue=' '))
+                try:
 
-
-def create_text_section(filepath, query, summarizer):
-    # read or create word document and make query the heading
-    print("Creating document.")
-    try:
-        doc = docx.Document(filepath)
-    except:
-        doc = docx.Document()
-    doc.add_heading(query, 1)
-    all_summaries = []
-    text_exp = []
-    # scrape text
-    text = get_text(query)
-    print(text, type(text))
-    for url, t in text.items():
-
-        for img_path, img in scrape_images(url):
-            print(f"Attempting to add img from {url}")
+                    self.doc.add_picture(img_path, width=Inches(5.0))
+                except Exception as e:
+                    print(f"Nope: {e}")
+                    continue
 
             try:
-                doc.add_picture(img_path)
+                self.text_exp = " ".join(line for line in t.split('\n') if len(line) > 20 or " [ " in line)
+                self.summaries = self.get_summaries()
+                self.final_text = self.clean_summaries()
+                self.doc.add_paragraph(self.final_text)
+                self.doc.save(self.filepath)
+
             except Exception as e:
-                print(f"Nope: {e}")
+
+                print(f"boo {url} ...")
+                print(f"\n\nEXCEPTION: {e}\n\n")
+
                 continue
 
-
-        try:
-            remove_short = " ".join(line for line in t.split('\n') if len(line) > 20 or " [ " in line)
-            remove_short = remove_short.split('\n')
-            text_exp.append(remove_short)
-            #print(f"Summarizing {url} ...")
-            #summaries = get_summaries(remove_short, summarizer)
-            #all_summaries.append(summaries)
-            print(f"\n\nALL SUMMARIES:\n{all_summaries}")
-            #summary = clean_summaries(summaries)
-            #doc.add_paragraph(summary)
-            doc.add_paragraph(url)
-            #doc.save(filepath)
-
-        except Exception as e:
-
-            print(f"boo {url} ...")
-            print(f"\n\nEXCEPTION: {e}\n\n")
-
-            continue
-
-    all_text = zip_concat_text(text_exp)
-    all_summed = get_summaries(all_text, summarizer, batch_size=3000)
-    final_text = clean_summaries(all_summed)
-    print(f"All Summaries: {all_text}")
-    doc.add_paragraph(final_text)
-    doc.save(filepath)
-
-def get_summaries(full_text, summarizer, batch_size=3000):
-    N = len(full_text)
-
-
-    # maker sure n_batches is always at least 1
-    n_batches = math.ceil((N+1) / batch_size)
-    batch = N // n_batches
-
-    summaries = []
-    for i in range(0, N, batch):
-        print(i, batch+i)
-        section = full_text[i:(i+batch)]
-        try:
-            if len(section) < 50:
-                print("section too short")
-                continue
-
-            summary = summarizer(section, min_length=90, max_length=200)
-            summaries.append(summary[0]['summary_text'])
-            print(summary)
-        except Exception as e:
-            print(f"\nFAILURE: {e}")
-            continue
-
-    return summaries
-
-def clean_summaries(summaries):
-    cleaned_summaries = ". ".join(sentence[0].upper() + sentence[1:] for sentence in "\n".join(summaries).split(" . "))
-    return cleaned_summaries
+        #self.summaries = self.get_summaries()
+        #self.final_text = self.clean_summaries()
+        #self.doc.add_paragraph(self.final_text)
+        self.doc.add_paragraph('\n\n'.join(self.links))
+        self.doc.save(self.filepath)
 
 
 if __name__ == '__main__':
@@ -167,6 +169,9 @@ if __name__ == '__main__':
 
     parser.add_argument('queries', type=str, nargs='*', help="Your google queries")
     args = parser.parse_args()
-    summarizer = pipeline("summarization")
+    wp = WordPhantom(args.filepath, num_images=5)
     for query in args.queries:
-        create_text_section(args.filepath, query, summarizer)
+        wp.create_text_section(query)
+    print(wp.links)
+    print(wp.filepath)
+    print(wp.summaries)
